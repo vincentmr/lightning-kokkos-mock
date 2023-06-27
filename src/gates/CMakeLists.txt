@@ -3,4 +3,4 @@ set(CMAKE_CXX_STANDARD 17)
 
 add_library(lightning_kokkos_gates INTERFACE)
 target_include_directories(lightning_kokkos_gates INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(lightning_kokkos_gates INTERFACE lightning_kokkos_utils)
+# target_link_libraries(lightning_kokkos_gates INTERFACE lightning_kokkos_utils)
