@@ -46,20 +46,19 @@
 #include <cstring>
 #include <limits>
 #include <sys/time.h>
-#include <utility> // std::pair
 
 #include <Kokkos_Core.hpp>
 #include <Kokkos_StdAlgorithms.hpp>
 
-// KokkosKernels headers
-// #include "KokkosBatched_Util.hpp"
-
-// #include "KokkosBatched_Axpy.hpp"
-// #include "KokkosBatched_Axpy_Impl.hpp"
-// #include "KokkosBatched_Gemv_Decl.hpp"
-// #include "KokkosBatched_Gemv_Team_Impl.hpp"
-
 // #include "Util.hpp"
+
+// #include <simd.hpp>
+// #ifdef KOKKOS_ENABLE_CUDA
+// using simd_t = simd::simd<double, simd::simd_abi::cuda_warp<32>>;
+// #else
+// using simd_t = simd::simd<double, simd::simd_abi::native>;
+// #endif
+// using simd_storage_t = simd_t::storage_type;
 
 #ifdef KOKKOS_ENABLE_CUDA
 #define MemSpace Kokkos::CudaSpace
@@ -77,13 +76,14 @@
 
 using ExecSpace = MemSpace::execution_space;
 using range_policy = Kokkos::RangePolicy<ExecSpace>;
-using layout = Kokkos::LayoutRight;
-using VectorType = Kokkos::complex<double>;
-using ViewVectorType = Kokkos::View<VectorType *, layout, MemSpace>;
-using ViewMatrixType = Kokkos::View<VectorType **, layout, MemSpace>;
+using mdrange_policy = Kokkos::MDRangePolicy<Kokkos::Rank<2>>;
+using layout = Kokkos::LayoutLeft;
 using team_policy = Kokkos::TeamPolicy<>;
 using member_type = Kokkos::TeamPolicy<>::member_type;
-// using policy_type = Kokkos::TeamPolicy<exec_space>;
+// using vectorType = Kokkos::complex<double>;
+#include <complex>
+using vectorType = std::complex<double>;
+// using vectorType = double;
 
 void checkSizes(std::size_t &num_qubits, std::size_t &S, std::size_t &T,
                 std::size_t &nrepeat);
@@ -104,16 +104,16 @@ inline auto constexpr fillLeadingOnes(size_t pos) -> size_t {
 
 struct singleQubitOpFunctor {
 
-  Kokkos::View<VectorType *> arr;
-  Kokkos::View<VectorType *> matrix;
+  Kokkos::View<vectorType *> arr;
+  Kokkos::View<vectorType *> matrix;
 
   std::size_t rev_wire;
   std::size_t rev_wire_shift;
   std::size_t wire_parity;
   std::size_t wire_parity_inv;
 
-  singleQubitOpFunctor(Kokkos::View<VectorType *> arr_, std::size_t num_qubits,
-                       const Kokkos::View<VectorType *> matrix_,
+  singleQubitOpFunctor(Kokkos::View<vectorType *> arr_, std::size_t num_qubits,
+                       const Kokkos::View<vectorType *> matrix_,
                        const std::vector<size_t> &wires) {
     arr = arr_;
     matrix = matrix_;
@@ -127,81 +127,182 @@ struct singleQubitOpFunctor {
   void operator()(const std::size_t k) const {
     const std::size_t i0 = ((k << 1U) & wire_parity_inv) | (wire_parity & k);
     const std::size_t i1 = i0 | rev_wire_shift;
-    const VectorType v0 = arr[i0];
-    const VectorType v1 = arr[i1];
-    arr[i0] = matrix[0B00] * v0 +
-              matrix[0B01] * v1; // NOLINT(readability-magic-numbers)
-    arr[i1] = matrix[0B10] * v0 +
-              matrix[0B11] * v1; // NOLINT(readability-magic-numbers)
+    const vectorType v0 = arr[i0];
+    const vectorType v1 = arr[i1];
+    arr[i0] = matrix[0B00] * v0 + matrix[0B01] * v1;
+    arr[i1] = matrix[0B10] * v0 + matrix[0B11] * v1;
   }
 };
 
-// void applyGate(const ViewVectorType &alpha, const ViewMatrixType &x,
-//                const ViewMatrixType &y, const std::size_t num_qubits,
-//                const std::vector<size_t> &wires) {
-//   std::size_t nblk = std::pow(2, num_qubits - wires[0] - 1);
-//   std::size_t sblk = std::pow(2, wires[0]);
-//   team_policy policy(1, Kokkos::AUTO());
-//   // KokkosBatched::SerialAxpy::invoke(alpha, x, y);
-//   Kokkos::parallel_for(
-//       "apply-gate", policy, KOKKOS_LAMBDA(const member_type &member) {
-//         const std::size_t i = member.league_rank();
-//         auto aa = Kokkos::subview(alpha, Kokkos::ALL());
-//         auto xx = Kokkos::subview(x, Kokkos::ALL(), Kokkos::ALL());
-//         auto yy = Kokkos::subview(y, Kokkos::ALL(), Kokkos::ALL());
-//         KokkosBatched::TeamAxpy<member_type>::invoke(member, aa, xx, yy);
-//       });
-//   // Kokkos::parallel_for(
-//   //     "apply-block-jacobi", policy, KOKKOS_LAMBDA(const member_type &member)
-//   //     {
-//   //       const int i = member.league_rank();
-//   //       const VectorType one(1), zero(0);
-//   //       auto AA = Kokkos::subview(y, Kokkos::ALL(), Kokkos::ALL());
-//   //       auto xx = Kokkos::subview(x, i, Kokkos::ALL());
-//   //       auto bb = Kokkos::subview(alpha, Kokkos::ALL());
-//   //       KokkosBatched::TeamGemv<
-//   //           member_type, KokkosBatched::Trans::NoTranspose,
-//   //           KokkosBatched::Algo::Level2::Unblocked>::invoke(member, one, AA,
-//   //           bb,
-//   //                                                           zero, xx);
-//   //     });
-// }
+//  struct singleQubitSimdFunctor {
 
-// struct teamPolicyFunctor {
+//   Kokkos::View<vectorType *> arr;
+//   Kokkos::View<vectorType *> matrix;
 
-//   Kokkos::View<VectorType *> arr;
-//   Kokkos::View<VectorType *> matrix;
+//   std::size_t rev_wire;
+//   std::size_t rev_wire_shift;
+//   std::size_t wire_parity;
+//   std::size_t wire_parity_inv;
 
-//   std::size_t nblk;
-//   std::size_t sblk;
-
-//   teamPolicyFunctor(Kokkos::View<VectorType *> arr_, std::size_t num_qubits_,
-//                     const Kokkos::View<VectorType *> matrix_,
-//                     const std::vector<size_t> &wires_) {
+//   singleQubitSimdFunctor(
+//       Kokkos::View<vectorType *> arr_, std::size_t
+//       num_qubits, const Kokkos::View<vectorType *> matrix_,
+//       const std::vector<size_t> &wires) {
 //     arr = arr_;
 //     matrix = matrix_;
-//     nblk = std::pow(2, num_qubits_ - wires_[0] - 1);
-//     sblk = std::pow(2, wires_[0]);
+//     rev_wire = num_qubits - wires[0] - 1;
+//     rev_wire_shift = (static_cast<size_t>(1U) << rev_wire);
+//     wire_parity = fillTrailingOnes(rev_wire);
+//     wire_parity_inv = fillLeadingOnes(rev_wire + 1);
 //   }
 
 //   KOKKOS_INLINE_FUNCTION
-//   void operator()(const Kokkos::TeamPolicy<>::member_type &teamMember) const
-//   {
-//     const int i = teamMember.league_rank();
-//     const std::size_t offset = i * sblk * 2;
-//     Kokkos::parallel_for(
-//         Kokkos::TeamThreadRange(teamMember, 0, sblk),
-//         // Kokkos::TeamVectorRange(teamMember, 0, sblk),
-//         KOKKOS_LAMBDA(const int j) {
-//           const std::size_t i0 = j + offset;
-//           const std::size_t i1 = i0 + sblk;
-//           const VectorType v0 = arr[i0];
-//           const VectorType v1 = arr[i1];
-//           arr[i0] = matrix[0B00] * v0 + matrix[0B01] * v1;
-//           arr[i1] = matrix[0B10] * v0 + matrix[0B11] * v1;
-//         });
+//   void operator()(const std::size_t k) const {
+//     const std::size_t i0 = ((k << 1U) & wire_parity_inv) | (wire_parity &
+//     k); const std::size_t i1 = i0 | rev_wire_shift; const
+//     vectorType v0 = arr[i0]; const
+//     vectorType v1 = arr[i1]; arr[i0] = matrix[0B00] * v0 +
+//     matrix[0B01] * v1; arr[i1] = matrix[0B10] * v0 + matrix[0B11] * v1;
 //   }
 // };
+
+struct teamPolicyFunctor {
+
+  Kokkos::View<vectorType *> arr;
+  Kokkos::View<vectorType *> matrix;
+
+  std::size_t nblk;
+  std::size_t sblk;
+
+  teamPolicyFunctor(Kokkos::View<vectorType *> arr_, std::size_t num_qubits_,
+                    const Kokkos::View<vectorType *> matrix_,
+                    const std::vector<size_t> &wires_) {
+    arr = arr_;
+    matrix = matrix_;
+    nblk = std::pow(2, num_qubits_ - wires_[0] - 1);
+    sblk = std::pow(2, wires_[0]);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const Kokkos::TeamPolicy<>::member_type &teamMember) const {
+    const int i = teamMember.league_rank();
+    const std::size_t offset = i * sblk * 2;
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(teamMember, 0, sblk),
+        // Kokkos::TeamVectorRange(teamMember, 0, sblk),
+        KOKKOS_LAMBDA(const int j) {
+          const std::size_t i0 = j + offset;
+          const std::size_t i1 = i0 + sblk;
+          const vectorType v0 = arr[i0];
+          const vectorType v1 = arr[i1];
+          arr[i0] = matrix[0B00] * v0 + matrix[0B01] * v1;
+          arr[i1] = matrix[0B10] * v0 + matrix[0B11] * v1;
+        });
+  }
+};
+
+template <std::size_t V> struct threadVectorFunctor {
+
+  Kokkos::View<vectorType *> arr;
+  Kokkos::View<vectorType *> matrix;
+
+  std::size_t nblk;
+  std::size_t sblk;
+
+  threadVectorFunctor(Kokkos::View<vectorType *> arr_, std::size_t num_qubits_,
+                      const Kokkos::View<vectorType *> matrix_,
+                      const std::vector<size_t> &wires_) {
+    arr = arr_;
+    matrix = matrix_;
+    nblk = std::pow(2, num_qubits_ - wires_[0] - 1);
+    sblk = std::pow(2, wires_[0]);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const Kokkos::TeamPolicy<>::member_type &teamMember) const {
+    const int i = teamMember.league_rank();
+    const std::size_t offset = i * sblk * 2;
+    Kokkos::parallel_for(
+        Kokkos::TeamThreadRange(teamMember, 0, sblk / V), [&](const int j) {
+          const std::size_t jV = j * V;
+          Kokkos::parallel_for(
+              Kokkos::ThreadVectorRange(teamMember, V), [&](const int ii) {
+                const std::size_t i0 = jV + ii + offset;
+                const std::size_t i1 = i0 + sblk;
+                const vectorType v0 = arr[i0];
+                const vectorType v1 = arr[i1];
+                arr[i0] = matrix[0B00] * v0 + matrix[0B01] * v1;
+                arr[i1] = matrix[0B10] * v0 + matrix[0B11] * v1;
+              });
+        });
+  }
+};
+
+template <std::size_t V> struct threadVectorFunctor2 {
+
+  Kokkos::View<vectorType *> arr;
+  Kokkos::View<vectorType *> matrix;
+
+  std::size_t rev_wire;
+  std::size_t rev_wire_shift;
+  std::size_t wire_parity;
+  std::size_t wire_parity_inv;
+
+  threadVectorFunctor2(Kokkos::View<vectorType *> arr_, std::size_t num_qubits,
+                       const Kokkos::View<vectorType *> matrix_,
+                       const std::vector<size_t> &wires) {
+    arr = arr_;
+    matrix = matrix_;
+    rev_wire = num_qubits - wires[0] - 1;
+    rev_wire_shift = (static_cast<size_t>(1U) << rev_wire);
+    wire_parity = fillTrailingOnes(rev_wire);
+    wire_parity_inv = fillLeadingOnes(rev_wire + 1);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const Kokkos::TeamPolicy<>::member_type &teamMember) const {
+    const int k = teamMember.league_rank() * V;
+    Kokkos::parallel_for(
+        Kokkos::ThreadVectorRange(teamMember, V), KOKKOS_LAMBDA(int kk) {
+          const int i0 =
+              (((k + kk) << 1U) & wire_parity_inv) | (wire_parity & (k + kk));
+          const int i1 = i0 | rev_wire_shift;
+          const vectorType v0 = arr[i0];
+          const vectorType v1 = arr[i1];
+          arr[i0] = matrix[0B00] * v0 + matrix[0B01] * v1;
+          arr[i1] = matrix[0B10] * v0 + matrix[0B11] * v1;
+        });
+  }
+};
+
+struct mdRangeFunctor {
+
+  Kokkos::View<vectorType *> arr;
+  Kokkos::View<vectorType *> matrix;
+
+  std::size_t nblk;
+  std::size_t sblk;
+
+  mdRangeFunctor(Kokkos::View<vectorType *> arr_, std::size_t num_qubits_,
+                 const Kokkos::View<vectorType *> matrix_,
+                 const std::vector<size_t> &wires_) {
+    arr = arr_;
+    matrix = matrix_;
+    nblk = std::pow(2, num_qubits_ - wires_[0] - 1);
+    sblk = std::pow(2, wires_[0]);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const std::size_t i, const std::size_t j) const {
+    const std::size_t offset = i * sblk * 2;
+    const std::size_t i0 = j + offset;
+    const std::size_t i1 = i0 + sblk;
+    const vectorType v0 = arr[i0];
+    const vectorType v1 = arr[i1];
+    arr[i0] = matrix[0B00] * v0 + matrix[0B01] * v1;
+    arr[i1] = matrix[0B10] * v0 + matrix[0B11] * v1;
+  };
+};
 
 int main(int argc, char *argv[]) {
   std::size_t num_qubits = -1; // number of qubits
@@ -240,46 +341,32 @@ int main(int argc, char *argv[]) {
   {
 
     // Allocate y, x vectors and Matrix A on device.
+    typedef Kokkos::View<vectorType *, layout, MemSpace> ViewVectorType;
     ViewVectorType sv0("sv0", S);
     ViewVectorType sv1("sv1", S);
     constexpr int mats = 4;
-    ViewVectorType mat("gate", mats);
-
-    std::size_t nblk = std::pow(2, num_qubits - T - 1);
-    std::size_t sblk = std::pow(2, T);
-    ViewVectorType alpha("alpha", sblk * 2);
-    ViewMatrixType sm0("sm0", sblk * 2, nblk);
-    ViewMatrixType sm1("sm1", sblk * 2, nblk);
+    ViewVectorType mat("mat", mats);
 
     // Create host mirrors of device views.
     ViewVectorType::HostMirror mat_h = Kokkos::create_mirror_view(mat);
     ViewVectorType::HostMirror sv0_h = Kokkos::create_mirror_view(sv0);
-    ViewVectorType::HostMirror alpha_h = Kokkos::create_mirror_view(alpha);
-    ViewMatrixType::HostMirror sm0_h = Kokkos::create_mirror_view(sm0);
 
+    // Initialize y vector on host.
     for (int i = 0; i < mats; ++i) {
-      mat_h(i) = static_cast<VectorType>(1);
+      mat_h[i] = static_cast<vectorType>(1);
     }
     for (int i = 0; i < S; ++i) {
-      sv0_h(i) = static_cast<VectorType>(1);
-    }
-    for (int i = 0; i < sblk * 2; ++i) {
-      alpha_h(i) = static_cast<VectorType>(1);
-    }
-    for (int j = 0; j < nblk; ++j) {
-      for (int i = 0; i < sblk * 2; ++i) {
-        sm0_h(i, j) = static_cast<VectorType>(1);
-      }
+      sv0_h[i] = static_cast<vectorType>(1);
     }
 
     // Deep copy host views to device views.
     Kokkos::deep_copy(mat, mat_h);
     Kokkos::deep_copy(sv0, sv0_h);
-    Kokkos::deep_copy(sv1, sv0_h);
+    // std::unique_ptr<ViewVectorType> data_ =
+    //     std::make_unique<ViewVectorType>("data_", std::pow(2, num_qubits));
+    // data_ = sv0;
+
     std::vector<size_t> wires = {T};
-    Kokkos::deep_copy(alpha, alpha_h);
-    Kokkos::deep_copy(sm0, sm0_h);
-    Kokkos::deep_copy(sm1, sm0_h);
 
     // Timer products.
     Kokkos::Timer timer;
@@ -287,11 +374,68 @@ int main(int argc, char *argv[]) {
     for (int repeat = 0; repeat < nrepeat; repeat++) {
       // Application: <y,Ax> = y^T*A*x
 
-      // Kokkos::parallel_for(range_policy(0, std::pow(2, num_qubits - 1)),
-      //                      singleQubitOpFunctor(sv0, num_qubits, mat,
+      // singleQubitOpFunctor f{singleQubitOpFunctor(sv0, num_qubits, mat,
+      // wires)}; for (int i = 0; i < std::pow(2, num_qubits - 1); i++) {
+      //   f(i);
+      // }
+
+      Kokkos::parallel_for(range_policy(0, std::pow(2, num_qubits - 1)),
+                           singleQubitOpFunctor(sv0, num_qubits, mat, wires));
+
+      // std::size_t nblk = std::pow(2, num_qubits - wires[0] - 1);
+      // std::size_t sblk = std::pow(2, wires[0]);
+      // Kokkos::parallel_for("H*sv0", mdrange_policy({0, 0}, {nblk, sblk}),
+      //                      mdRangeFunctor(sv0, num_qubits, mat,
       //                      wires));
 
-      // applyGate(alpha, sm0, sm1, num_qubits, wires);
+      // std::size_t nblk = std::pow(2, num_qubits - wires[0] - 1);
+      // std::size_t sblk = std::pow(2, wires[0]);
+      // Kokkos::parallel_for(
+      //     "H*sv0", mdrange_policy({0, 0}, {nblk, sblk}),
+      //     KOKKOS_LAMBDA(const std::size_t i, const std::size_t j) {
+      //       const std::size_t offset = i * sblk * 2;
+      //       const std::size_t i0 = j + offset;
+      //       const std::size_t i1 = i0 + sblk;
+      //       const vectorType v0 = sv0[i0];
+      //       const vectorType v1 = sv0[i1];
+      //       sv0[i0] = mat[0B00] * v0 + mat[0B01] * v1;
+      //       sv0[i1] = mat[0B10] * v0 + mat[0B11] * v1;
+      //     });
+
+      // std::size_t nblk = std::pow(2, num_qubits - wires[0] - 1);
+      // Kokkos::parallel_for(
+      //     "H*sv0", team_policy(nblk, Kokkos::AUTO, 32),
+      //     threadVectorFunctor<32>(sv0, num_qubits, mat, wires));
+
+      // Kokkos::parallel_for(
+      //     "H*sv0",
+      //     team_policy(std::pow(2, num_qubits - 1 - 5), Kokkos::AUTO, 32),
+      //     threadVectorFunctor2<32>(sv0, num_qubits, mat, wires));
+
+      // std::size_t nblk = std::pow(2, num_qubits - wires[0] - 1);
+      // Kokkos::parallel_for(
+      //     "H*sv0", team_policy(nblk, Kokkos::AUTO),
+      //     teamPolicyFunctor(sv0, num_qubits, mat, wires));
+
+      // std::size_t nblk = std::pow(2, num_qubits - wires[0] - 1);
+      // std::size_t sblk = std::pow(2, wires[0]);
+      // Kokkos::parallel_for(
+      //     "H*sv0", team_policy(nblk, Kokkos::AUTO),
+      //     KOKKOS_LAMBDA(const member_type &teamMember) {
+      //       const int i = teamMember.league_rank();
+      //       const std::size_t offset = i * sblk * 2;
+      //       Kokkos::parallel_for(
+      //           Kokkos::TeamThreadRange(teamMember, 0, sblk),
+      //           // Kokkos::TeamVectorRange(teamMember, 0, sblk),
+      //           [=](const int j) {
+      //             const std::size_t i0 = j + offset;
+      //             const std::size_t i1 = i0 + sblk;
+      //             const vectorType v0 = sv0[i0];
+      //             const vectorType v1 = sv0[i1];
+      //             sv0[i0] = mat[0B00] * v0 + mat[0B01] * v1;
+      //             sv0[i1] = mat[0B10] * v0 + mat[0B11] * v1;
+      //           });
+      //     });
 
       // Output result.
       // if (repeat == (nrepeat - 1)) {
@@ -306,6 +450,7 @@ int main(int argc, char *argv[]) {
       // }
     }
 
+    Kokkos::fence();
     // Calculate time.
     double time = timer.seconds();
 
@@ -314,10 +459,11 @@ int main(int argc, char *argv[]) {
     // The x vector (of length M) is read N times.
     // The y vector (of length N) is read once.
     // double Gbytes = 1.0e-9 * double( sizeof(double) * ( 2 * M * N + N ) );
-    double Gbytes = 1.0e-9 * double(sizeof(VectorType) * S);
+    double Gbytes = 1.0e-9 * double(sizeof(vectorType) * S);
 
     // Print results (problem size, time and bandwidth in GB/s).
-    // printf("  S( %12d ) nrepeat ( %12d ) problem( %12g MB ) time( %12g s ) "
+    // printf("  S( %12d ) nrepeat ( %12d ) problem( %12g MB ) time( %12g s )
+    // "
     //        "bandwidth( %12g GB/s )\n",
     //        S, nrepeat, Gbytes * 1000, time, Gbytes * nrepeat / time);
     printf("%12d, %12d, %12d, %12g, %12g, %12g\n", S, T, nrepeat, Gbytes * 1000,
@@ -336,14 +482,14 @@ void checkSizes(std::size_t &num_qubits, std::size_t &S, std::size_t &T,
     S = pow(2, num_qubits);
   }
 
-  // If S is undefined and N or M is undefined, set S to 2^22 or the bigger of N
-  // and M.
+  // If S is undefined and N or M is undefined, set S to 2^22 or the bigger of
+  // N and M.
   if (S == -1) {
     S = pow(2, num_qubits);
   }
 
-  // If both N and M are undefined, fix row length to the smaller of S and 2^10
-  // = 1024.
+  // If both N and M are undefined, fix row length to the smaller of S and
+  // 2^10 = 1024.
   if (T == -1) {
     T = 0;
   }
