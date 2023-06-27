@@ -1,11 +1,11 @@
 export OMP_PROC_BIND=close
 export OMP_PLACES=cores
-export PATH=$PWD/build:$PATH
+export PATH=$PWD/../build/src:$PATH
 if [ -f timings.dat ]; then
     cp timings.dat copy_of_timings.dat
 fi
 rm -f timings.dat
-echo `which 04_Exercise`
+echo `which lightning_kokkos`
 echo "NPROC, SIZE, NQBITS, TARGET, NREPEAT, TIME, BANDWIDTH" >> timings.dat
 for PROC in `seq 7 -1 0`; do
     export OMP_NUM_THREADS=$((2**PROC))
@@ -16,9 +16,9 @@ for PROC in `seq 7 -1 0`; do
             TMP="$ONT, "
             echo -n "$TMP" >> timings.dat
             if [ $OMP_NUM_THREADS -ge 32 ];then
-                04_Exercise -S $NBIT -T $TARG -nrepeat 100 >> timings.dat
+                lightning_kokkos -S $NBIT -T $TARG -nrepeat 100 >> timings.dat
             else
-                04_Exercise -S $NBIT -T $TARG -nrepeat  10 >> timings.dat
+                lightning_kokkos -S $NBIT -T $TARG -nrepeat  10 >> timings.dat
             fi
         done
     done
