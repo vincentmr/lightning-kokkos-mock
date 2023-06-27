@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Util.hpp"
+
 #include <complex>
 #include <cstdio>
 #include <cstdlib>
@@ -10,26 +12,24 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_StdAlgorithms.hpp>
 
+
 // using vectorType = double;
 using vectorType = std::complex<double>;
 // using vectorType = Kokkos::complex<double>;
 
-void checkSizes(std::size_t &num_qubits, std::size_t &S, std::size_t &T,
-                std::size_t &nrepeat);
+// /**
+//  * @brief Fill ones from LSB to rev_wire
+//  */
+// inline size_t fillTrailingOnes(size_t pos) {
+//     return (pos == 0) ? 0 : (~size_t(0) >> (CHAR_BIT * sizeof(size_t) - pos));
+// }
 
-/**
- * @brief Fill ones from LSB to rev_wire
- */
-inline size_t fillTrailingOnes(size_t pos) {
-  return (pos == 0) ? 0 : (~size_t(0) >> (CHAR_BIT * sizeof(size_t) - pos));
-}
-
-/**
- * @brief Fill ones from MSB to pos
- */
-inline auto constexpr fillLeadingOnes(size_t pos) -> size_t {
-  return (~size_t(0)) << pos;
-}
+// /**
+//  * @brief Fill ones from MSB to pos
+//  */
+// inline auto constexpr fillLeadingOnes(size_t pos) -> size_t {
+//     return (~size_t(0)) << pos;
+// }
 
 struct singleQubitOpFunctor {
 

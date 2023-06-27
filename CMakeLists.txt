@@ -11,6 +11,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_package(Kokkos REQUIRED)
+add_library(kokkos ALIAS Kokkos::kokkos)
 
 add_subdirectory(src)
 

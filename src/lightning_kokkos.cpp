@@ -77,15 +77,15 @@ using member_type = Kokkos::TeamPolicy<>::member_type;
 using vectorType = std::complex<double>;
 // using vectorType = double;
 
-void checkSizes(std::size_t &num_qubits, std::size_t &S, std::size_t &T,
-                std::size_t &nrepeat);
+void checkSizes(long long &num_qubits, long long &S, long long &T,
+                long long &nrepeat);
 
 
 int main(int argc, char *argv[]) {
-  std::size_t num_qubits = -1; // number of qubits
-  std::size_t S = -1;          // total size 2^22
-  std::size_t T = -1;          // target
-  std::size_t nrepeat = 100;   // number of repeats of the test
+  long long num_qubits = -1; // number of qubits
+  long long S = -1;          // total size 2^22
+  long long T = -1;          // target
+  long long nrepeat = 100;   // number of repeats of the test
 
   // Read command line arguments.
   for (int i = 0; i < argc; i++) {
@@ -143,13 +143,12 @@ int main(int argc, char *argv[]) {
     //     std::make_unique<ViewVectorType>("data_", std::pow(2, num_qubits));
     // data_ = sv0;
 
-    std::vector<size_t> wires = {T};
+    std::vector<size_t> wires = {static_cast<size_t>(T)};
 
     // Timer products.
     Kokkos::Timer timer;
 
     for (int repeat = 0; repeat < nrepeat; repeat++) {
-      // Application: <y,Ax> = y^T*A*x
 
       // singleQubitOpFunctor f{singleQubitOpFunctor(sv0, num_qubits, mat,
       // wires)}; for (int i = 0; i < std::pow(2, num_qubits - 1); i++) {
@@ -214,17 +213,6 @@ int main(int argc, char *argv[]) {
       //           });
       //     });
 
-      // Output result.
-      // if (repeat == (nrepeat - 1)) {
-      //   printf("  Computed result for %d x %d is %lf\n", N, M, result);
-      // }
-
-      // const double solution = (double)N * (double)M;
-
-      // if (result != solution) {
-      //   printf("  Error: result( %lf ) != solution( %lf )\n", result,
-      //   solution);
-      // }
     }
 
     Kokkos::fence();
@@ -232,17 +220,9 @@ int main(int argc, char *argv[]) {
     double time = timer.seconds();
 
     // Calculate bandwidth.
-    // Each matrix A row (each of length M) is read once.
-    // The x vector (of length M) is read N times.
-    // The y vector (of length N) is read once.
-    // double Gbytes = 1.0e-9 * double( sizeof(double) * ( 2 * M * N + N ) );
     double Gbytes = 1.0e-9 * double(sizeof(vectorType) * S);
 
     // Print results (problem size, time and bandwidth in GB/s).
-    // printf("  S( %12d ) nrepeat ( %12d ) problem( %12g MB ) time( %12g s )
-    // "
-    //        "bandwidth( %12g GB/s )\n",
-    //        S, nrepeat, Gbytes * 1000, time, Gbytes * nrepeat / time);
     printf("%12d, %12d, %12d, %12g, %12g, %12g\n", S, T, nrepeat, Gbytes * 1000,
            time, Gbytes * nrepeat / time);
   }
@@ -251,8 +231,8 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-void checkSizes(std::size_t &num_qubits, std::size_t &S, std::size_t &T,
-                std::size_t &nrepeat) {
+void checkSizes(long long &num_qubits, long long &S, long long &T,
+                long long &nrepeat) {
 
   if (num_qubits == -1) {
     num_qubits = 20;
