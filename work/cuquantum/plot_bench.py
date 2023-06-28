@@ -40,7 +40,7 @@ def make_plot(nproc, nqbit, ntarg, bandw, num_threads=1):
     #     plt.plot(ntarg[mask], bandw[mask], label=f"# nq={i}")
 
     plt.yscale("log", base=10)
-    plt.xlabel("Target qubit")
+    plt.xlabel("# qubits")
     plt.ylim((0.1, 2000))
     plt.ylabel("Bandwidth [GB/s]")
     plt.title("Bandwidth vs. # qubits")

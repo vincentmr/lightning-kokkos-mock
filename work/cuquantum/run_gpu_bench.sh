@@ -13,14 +13,14 @@ echo "NPROC, SIZE, NQBITS, TARGET, NREPEAT, TIME, BANDWIDTH" >> timings.dat
 
 export OMP_NUM_THREADS=$((2**PROC))
 printf -v ONT %04d $OMP_NUM_THREADS
-for NBIT in `seq 16 27`; do
+for NBIT in `seq 8 30`; do
     MIDTARG=$((NBIT / 2))
     MAXTARG=$((NBIT - 1))
     NREPS=100
     if [ $NBIT -gt 25 ]; then 
         NREPS=25; 
     fi 
-    for TARG in $(seq $MAXTARG $MAXTARG); do
+    for TARG in $(seq 0 0); do
         TMP="$ONT, "
         echo -n "$TMP" >> timings.dat
         ex1 -S $NBIT -T $TARG -nrepeat 1 --type $type
