@@ -48,6 +48,14 @@ using graph_type = typename crs_matrix_type::staticcrsgraph_type;
 
 using data_view_type = Kokkos::View<vectorType *, layout, MemSpace>;
 
+void apply_Sparse_Matrix_Kokkos(crs_matrix_type sparse_matrix,
+                                Kokkos::View<vectorType **> vector_view,
+                                Kokkos::View<vectorType **> result_view) {
+  const data_type alpha(1.0);
+  const data_type beta;
+  KokkosSparse::spmv("N", alpha, sparse_matrix, vector_view, beta, result_view);
+}
+
 crs_matrix_type create_Kokkos_Sparse_Matrix(index_type *row_map_ptr,
                                             const index_type numRows,
                                             index_type *entries_ptr,
@@ -60,14 +68,6 @@ crs_matrix_type create_Kokkos_Sparse_Matrix(index_type *row_map_ptr,
   graph_type myGraph(entries, row_map);
   crs_matrix_type SparseMatrix("matrix", numRows, values, myGraph);
   return SparseMatrix;
-}
-
-void apply_Sparse_Matrix_Kokkos(crs_matrix_type sparse_matrix,
-                                Kokkos::View<vectorType **> vector_view,
-                                Kokkos::View<vectorType **> result_view) {
-  const data_type alpha(1.0);
-  const data_type beta;
-  KokkosSparse::spmv("N", alpha, sparse_matrix, vector_view, beta, result_view);
 }
 
 crs_matrix_type get_sparse_matrix(index_type sblk) {

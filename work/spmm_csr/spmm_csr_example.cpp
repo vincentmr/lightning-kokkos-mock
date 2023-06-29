@@ -90,6 +90,13 @@ void tellTime(int size, int rank, int param0, int param1, double elapsedTime);
 
 int main(int argc, char *argv[]) {
 
+  cusparseOrder_t order = CUSPARSE_ORDER_COL;
+  cusparseSpMMAlg_t algo = (order == CUSPARSE_ORDER_ROW)
+                               ? CUSPARSE_SPMM_CSR_ALG2
+                               : CUSPARSE_SPMM_CSR_ALG1;
+  algo = CUSPARSE_SPMM_CSR_ALG1;
+  cusparseOperation_t trans = CUSPARSE_OPERATION_NON_TRANSPOSE; // fixed
+
   //--------------------------------------------------------------------------
   // READ COMMAND LINE ARGUMENTS
   std::size_t log_S = 20;    // log size
@@ -123,15 +130,16 @@ int main(int argc, char *argv[]) {
 
   //--------------------------------------------------------------------------
   // HOST PROBLEM DEFINITION
+
   int A_num_rows = sblk * 2;
   int A_num_cols = sblk * 2;
   int A_nnz = sblk * 4; // 2 non-zero per row/col
   int B_num_rows = A_num_cols;
   int B_num_cols = nblk;
-  int ldb = B_num_rows;
-  int ldc = A_num_rows;
-  int B_size = ldb * B_num_cols;
-  int C_size = ldc * B_num_cols;
+  int B_size = B_num_rows * B_num_cols;
+  int C_size = A_num_rows * B_num_cols;
+  int ldb = (order == CUSPARSE_ORDER_ROW) ? B_size / B_num_rows : B_num_rows;
+  int ldc = (order == CUSPARSE_ORDER_ROW) ? C_size / A_num_rows : A_num_rows;
   int *hA_csrOffsets;
   int *hA_columns;
   cuZ *hA_values;
@@ -186,25 +194,22 @@ int main(int argc, char *argv[]) {
                                    CUSPARSE_INDEX_BASE_ZERO, CUDA_C_64F))
   // Create dense matrix B
   CHECK_CUSPARSE(cusparseCreateDnMat(&matB, A_num_cols, B_num_cols, ldb, dB,
-                                     CUDA_C_64F, CUSPARSE_ORDER_COL))
+                                     CUDA_C_64F, order))
   // Create dense matrix C
   CHECK_CUSPARSE(cusparseCreateDnMat(&matC, A_num_rows, B_num_cols, ldc, dC,
-                                     CUDA_C_64F, CUSPARSE_ORDER_COL))
+                                     CUDA_C_64F, order))
   // allocate an external buffer if needed
-  CHECK_CUSPARSE(cusparseSpMM_bufferSize(
-      handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-      CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA, matB, &beta, matC,
-      CUDA_C_64F, CUSPARSE_SPMM_CSR_ALG1, &bufferSize))
+  CHECK_CUSPARSE(cusparseSpMM_bufferSize(handle, trans, trans, &alpha, matA,
+                                         matB, &beta, matC, CUDA_C_64F, algo,
+                                         &bufferSize))
   CHECK_CUDA(cudaMalloc(&dBuffer, bufferSize))
 
   // execute SpMM
   cudaDeviceSynchronize();
   double startTime = getTime();
   for (int c = 0; c < nrepeat; ++c) {
-    CHECK_CUSPARSE(cusparseSpMM(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, matA,
-                                matB, &beta, matC, CUDA_C_64F,
-                                CUSPARSE_SPMM_CSR_ALG1, dBuffer))
+    CHECK_CUSPARSE(cusparseSpMM(handle, trans, trans, &alpha, matA, matB, &beta,
+                                matC, CUDA_C_64F, algo, dBuffer))
   }
   cudaDeviceSynchronize();
 

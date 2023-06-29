@@ -1,7 +1,12 @@
 from matplotlib import pyplot as plt
 import numpy as np
+from pathlib import Path
 
 filename = "timings.dat"
+filename = "timings_col_alg1.dat"
+filename = "timings_col_alg2.dat"
+filename = "timings_row_alg1.dat"
+filename = "timings_row_alg2.dat"
 with open(filename, "r") as f:
     text = f.read()
 
@@ -23,8 +28,7 @@ for line in text:
 
 nproc, ndata, ntarg, bandw = np.array(nproc), np.array(ndata), np.array(ntarg), np.array(bandw)
 nqbit = np.log2(ndata)
-
-
+ntarg = 2**(ntarg+1)
 def make_plot(nproc, nqbit, ntarg, bandw, num_threads=1):
     import matplotlib.pyplot as plt
 
@@ -33,17 +37,18 @@ def make_plot(nproc, nqbit, ntarg, bandw, num_threads=1):
     nproc, nqbit, ntarg, bandw = nproc[mask], nqbit[mask], ntarg[mask], bandw[mask]
     for i in range(20, 31):
         mask = nqbit == i
-        plt.plot(ntarg[mask], bandw[mask], label=f"# nq={i}")
+        plt.plot(ntarg[mask], bandw[mask], label=f"log2(#vec)={i}")
 
+    plt.xscale("log", base=2)
     plt.yscale("log", base=10)
-    plt.xlabel("Target qubit")
+    plt.xlabel("Sparse matrix dim")
     plt.ylim((0.1, 2000))
     plt.ylabel("Bandwidth [GB/s]")
-    plt.title("Bandwidth vs. target qubit")
+    plt.title("Bandwidth vs. sparse matrix dim")
     # plt.xticks(np.arange(min(vntot), max(vntot) + 1) + 0.4)
     # plt.xticklabels(list(range(min(vntot), max(vntot) + 1)))
     plt.legend(loc="best")
-    plt.savefig(f"bandwidth_vs_target_qubit_{num_threads}_threads.png")
+    plt.savefig(f"bandwidth_vs_sparse_dim_{Path(filename).stem[8:]}.png")
 
 
 for n in [128]:

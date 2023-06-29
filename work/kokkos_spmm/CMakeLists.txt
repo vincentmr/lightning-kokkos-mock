@@ -7,7 +7,7 @@ project (Lightning-Kokkos
 set(PROJECT_VERSION "1.0.0")
 
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE RelWithDebInfo)
+    set(CMAKE_BUILD_TYPE Release)
 endif()
 
 find_package(Kokkos REQUIRED)

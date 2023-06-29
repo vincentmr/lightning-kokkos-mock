@@ -33,7 +33,7 @@ def make_plot(nproc, nqbit, ntarg, bandw, num_threads=1):
     fig = plt.figure(dpi=500)
     mask = nproc == num_threads
     nproc, nqbit, ntarg, bandw = nproc[mask], nqbit[mask], ntarg[mask], bandw[mask]
-    plt.plot(ntarg, bandw)
+    plt.plot(nqbit, bandw)
 
     # for i in range(11, 31):
     #     mask = nqbit == i

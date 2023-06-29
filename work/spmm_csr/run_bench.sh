@@ -18,7 +18,7 @@ for NBIT in `seq 20 30`; do
     MAXTARG=$((NBIT - 1))
     NREPS=10
     for TARG in $(seq 0 12); do
-    # for TARG in $(seq 6 8); do
+    # for TARG in $(seq 4 6); do
         TMP="$OMP_NUM_THREADS, "
         echo -n "$TMP" >> timings.dat
         ./spmm_csr_example -S $NBIT -T $TARG -nrepeat 1
