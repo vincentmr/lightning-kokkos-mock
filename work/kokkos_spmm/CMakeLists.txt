@@ -12,8 +12,7 @@ endif()
 
 find_package(Kokkos REQUIRED)
 find_package(KokkosKernels REQUIRED)
-add_library(kokkos ALIAS Kokkos::kokkos)
-add_library(kokkoskernels ALIAS Kokkos::kokkoskernels)
 
-add_subdirectory(src)
+add_executable(ex1 ex1.cpp)
+target_link_libraries(ex1 Kokkos::kokkos Kokkos::kokkoskernels)
 
