@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
   {
     const Scalar SC_ONE = Kokkos::ArithTraits<Scalar>::one();
 
-    Ordinal T = 10;
+    Ordinal T = 24;
     Ordinal numRows = std::pow(2, T + 1);
     Ordinal numCols = std::pow(2, 25 - 1 - T);
     Ordinal S = numRows * numCols;

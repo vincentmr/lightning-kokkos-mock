@@ -28,7 +28,7 @@
 using ExecSpace = MemSpace::execution_space;
 using range_policy = Kokkos::RangePolicy<ExecSpace>;
 using mdrange_policy = Kokkos::MDRangePolicy<Kokkos::Rank<2>>;
-using layout = Kokkos::LayoutLeft;
+using Layout = Kokkos::LayoutLeft;
 using team_policy = Kokkos::TeamPolicy<>;
 using member_type = Kokkos::TeamPolicy<>::member_type;
 
@@ -73,8 +73,8 @@ int main(int argc, char *argv[]) {
   {
 
     // Allocate state vector and gate matrix.
-    typedef Kokkos::View<vectorType *, layout, MemSpace> ViewVectorType;
-    typedef Kokkos::View<vectorType **, layout, MemSpace> ViewMatrixType;
+    typedef Kokkos::View<vectorType *, Layout, MemSpace> ViewVectorType;
+    typedef Kokkos::View<vectorType **, Layout, MemSpace> ViewMatrixType;
     ViewVectorType sv0("sv0", S);
     ViewVectorType sv1("sv1", S);
     constexpr int mats = 4;
@@ -99,7 +99,6 @@ int main(int argc, char *argv[]) {
     std::size_t nblk = std::pow(2, num_qubits - T - 1);
     std::size_t sblk = std::pow(2, T);
 
-    crs_matrix_type matrix;
     ViewMatrixType sm0("sm0", sblk * 2, nblk);
     ViewMatrixType sm1("sm1", sblk * 2, nblk);
     ViewMatrixType::HostMirror sm0_h = Kokkos::create_mirror_view(sm0);
@@ -108,9 +107,10 @@ int main(int argc, char *argv[]) {
     Kokkos::deep_copy(sm1_h, static_cast<vectorType>(1.0));
     Kokkos::deep_copy(sm0, sm0_h);
     Kokkos::deep_copy(sm1, sm1_h);
-    if (itype == 7) { // spmv
-      matrix = get_sparse_matrix(static_cast<index_type>(sblk));
-    }
+    // crs_matrix_type matrix;
+    // if (itype == 7) { // spmv
+    //   matrix = get_sparse_matrix(static_cast<index_type>(sblk));
+    // }
 
     // Timer products.
     Kokkos::fence();
@@ -173,7 +173,10 @@ int main(int argc, char *argv[]) {
         continue;
       }
       if (itype == 7) { // spmv
-        apply_Sparse_Matrix_Kokkos(matrix, sm0, sm1);
+        // apply_Sparse_Matrix_Kokkos(matrix, sm0, sm1);
+        Kokkos::parallel_for(
+            range_policy(0, nblk),
+            sparseSingleQubitOpFunctor(static_cast<size_t>(T), sm0, sm1));
         continue;
       }
     }

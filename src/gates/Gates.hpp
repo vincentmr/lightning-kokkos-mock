@@ -155,7 +155,8 @@ template <std::size_t V> struct teamPolicyFunctorV {
   void operator()(const Kokkos::TeamPolicy<>::member_type &teamMember) const {
     const int k = teamMember.league_rank() * V;
     Kokkos::parallel_for(
-        Kokkos::TeamVectorRange(teamMember, V), KOKKOS_LAMBDA(const std::size_t kk) {
+        Kokkos::TeamVectorRange(teamMember, V),
+        KOKKOS_LAMBDA(const std::size_t kk) {
           const std::size_t i0 =
               (((k + kk) << 1U) & wire_parity_inv) | (wire_parity & (k + kk));
           const std::size_t i1 = i0 | rev_wire_shift;
