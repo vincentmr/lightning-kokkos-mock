@@ -11,6 +11,7 @@
 #include <cusparse.h> // cusparseSpMM
 
 using cuZ = cuDoubleComplex;
+using cuI = std::uint64_t;
 
 #define CHECK_CUDA(func)                                                       \
   {                                                                            \
@@ -32,8 +33,8 @@ using cuZ = cuDoubleComplex;
     }                                                                          \
   }
 
-void get_A_matrix(const int sblk, cuZ matrix[], int *hA_csrOffsets,
-                  int *hA_columns, cuDoubleComplex *hA_values);
+void get_A_matrix(const int sblk, cuZ matrix[], cuI *hA_csrOffsets,
+                  cuI *hA_columns, cuDoubleComplex *hA_values);
 double getTime();
 void apply_cuquantum(size_t num_qubits, size_t S, size_t T, cuZ *h_sv,
                      cuZ *h_sv_result, cuZ matrix[], size_t nrepeat);
@@ -93,6 +94,8 @@ int main(int argc, char *argv[]) {
 
   apply_cuquantum(num_qubits, S, T, h_sv, h_sv_result, matrix, nrepeat);
   apply_cusparse(num_qubits, S, T, h_sv, h_sv_result, matrix, nrepeat);
+  free(h_sv);
+  free(h_sv_result);
   return EXIT_SUCCESS;
 }
 
@@ -107,17 +110,17 @@ int apply_cusparse(size_t num_qubits, size_t S, size_t T, cuZ *h_sv,
   std::size_t sblk = std::pow(2, T);                  // block size div-by-2
   std::size_t nblk = std::pow(2, num_qubits - T - 1); // number of blocks
 
-  int A_num_rows = sblk * 2;
-  int A_num_cols = sblk * 2;
-  int A_nnz = sblk * 4; // 2 non-zero per row/col
-  int B_num_rows = A_num_cols;
-  int B_num_cols = nblk;
-  int B_size = B_num_rows * B_num_cols;
-  int C_size = A_num_rows * B_num_cols;
-  int ldb = (order == CUSPARSE_ORDER_ROW) ? B_size / B_num_rows : B_num_rows;
-  int ldc = (order == CUSPARSE_ORDER_ROW) ? C_size / A_num_rows : A_num_rows;
-  int *hA_csrOffsets;
-  int *hA_columns;
+  cuI A_num_rows = sblk * 2;
+  cuI A_num_cols = sblk * 2;
+  cuI A_nnz = sblk * 4; // 2 non-zero per row/col
+  cuI B_num_rows = A_num_cols;
+  cuI B_num_cols = nblk;
+  cuI B_size = B_num_rows * B_num_cols;
+  cuI C_size = A_num_rows * B_num_cols;
+  cuI ldb = (order == CUSPARSE_ORDER_ROW) ? B_size / B_num_rows : B_num_rows;
+  cuI ldc = (order == CUSPARSE_ORDER_ROW) ? C_size / A_num_rows : A_num_rows;
+  cuI *hA_csrOffsets;
+  cuI *hA_columns;
   cuZ *hA_values;
   cuZ *hB;
   cuZ *hC;
@@ -126,8 +129,8 @@ int apply_cusparse(size_t num_qubits, size_t S, size_t T, cuZ *h_sv,
   cuZ beta = {0.0, 0.0};
 
   // cuZ matrix[] = {{0.0, 0.0}, {1.0, 0.0}, {1.0, 0.0}, {0.0, 0.0}};
-  hA_csrOffsets = (int *)malloc((A_num_rows + 1) * sizeof(int));
-  hA_columns = (int *)malloc(A_nnz * sizeof(int));
+  hA_csrOffsets = (cuI *)malloc((A_num_rows + 1) * sizeof(cuI));
+  hA_columns = (cuI *)malloc(A_nnz * sizeof(cuI));
   hA_values = (cuZ *)malloc(A_nnz * sizeof(cuZ));
   hB = (cuZ *)malloc(std::pow(2, num_qubits) * sizeof(cuZ));
   hC = (cuZ *)malloc(std::pow(2, num_qubits) * sizeof(cuZ));
@@ -140,19 +143,19 @@ int apply_cusparse(size_t num_qubits, size_t S, size_t T, cuZ *h_sv,
 
   //--------------------------------------------------------------------------
   // DEVICE MEMORY MANAGEMENT
-  int *dA_csrOffsets, *dA_columns;
+  cuI *dA_csrOffsets, *dA_columns;
   cuZ *dA_values, *dB, *dC;
   CHECK_CUDA(cudaSetDevice(0));
   CHECK_CUDA(
-      cudaMalloc((void **)&dA_csrOffsets, (A_num_rows + 1) * sizeof(int)))
-  CHECK_CUDA(cudaMalloc((void **)&dA_columns, A_nnz * sizeof(int)))
+      cudaMalloc((void **)&dA_csrOffsets, (A_num_rows + 1) * sizeof(cuI)))
+  CHECK_CUDA(cudaMalloc((void **)&dA_columns, A_nnz * sizeof(cuI)))
   CHECK_CUDA(cudaMalloc((void **)&dA_values, A_nnz * sizeof(cuZ)))
   CHECK_CUDA(cudaMalloc((void **)&dB, B_size * sizeof(cuZ)))
   CHECK_CUDA(cudaMalloc((void **)&dC, C_size * sizeof(cuZ)))
 
   CHECK_CUDA(cudaMemcpy(dA_csrOffsets, hA_csrOffsets,
-                        (A_num_rows + 1) * sizeof(int), cudaMemcpyHostToDevice))
-  CHECK_CUDA(cudaMemcpy(dA_columns, hA_columns, A_nnz * sizeof(int),
+                        (A_num_rows + 1) * sizeof(cuI), cudaMemcpyHostToDevice))
+  CHECK_CUDA(cudaMemcpy(dA_columns, hA_columns, A_nnz * sizeof(cuI),
                         cudaMemcpyHostToDevice))
   CHECK_CUDA(cudaMemcpy(dA_values, hA_values, A_nnz * sizeof(cuZ),
                         cudaMemcpyHostToDevice))
@@ -170,7 +173,7 @@ int apply_cusparse(size_t num_qubits, size_t S, size_t T, cuZ *h_sv,
   // Create sparse matrix A in CSR format
   CHECK_CUSPARSE(cusparseCreateCsr(&matA, A_num_rows, A_num_cols, A_nnz,
                                    dA_csrOffsets, dA_columns, dA_values,
-                                   CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
+                                   CUSPARSE_INDEX_64I, CUSPARSE_INDEX_64I,
                                    CUSPARSE_INDEX_BASE_ZERO, CUDA_C_64F))
   // Create dense matrix B
   CHECK_CUSPARSE(cusparseCreateDnMat(&matB, A_num_cols, B_num_cols, ldb, dB,
@@ -324,8 +327,8 @@ void apply_cuquantum(size_t num_qubits, size_t S, size_t T, cuZ *h_sv,
     cudaFree(extraWorkspace);
 }
 
-void get_A_matrix(const int sblk, cuZ matrix[], int *hA_csrOffsets,
-                  int *hA_columns, cuZ *hA_values) {
+void get_A_matrix(const int sblk, cuZ matrix[], cuI *hA_csrOffsets,
+                  cuI *hA_columns, cuZ *hA_values) {
   std::size_t count = 0;
   std::size_t i;
   for (i = 0; i < sblk; ++i) {
